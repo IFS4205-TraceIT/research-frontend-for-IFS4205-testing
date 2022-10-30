@@ -1,0 +1,61 @@
+name: Release Frontend
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  research-frontend-release:
+    # Only run on runners with the 'ci' label
+    runs-on: ci
+
+    container: node:18.9.0-slim
+
+    steps:
+      - name: Cleanup build folder
+        run: |
+          rm -rf ./* || true
+          rm -rf ./.??* || true
+
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        run: |
+          echo "::set-output name=dir::$(npm config get cache)"
+
+      - uses: actions/cache@v3
+        id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate files
+        run: npm run generate
+        env:
+          API_BASEURL: https://traceit-04.comp.nus.edu.sg/research/api
+          NUXT_APP_BASE_URL: /research/
+
+      - name: Archive files
+        run: |
+          tar -czf research-frontend.tar.gz -C ./.output/public .
+
+      - name: Delete previous release
+        uses: dev-drprasad/delete-tag-and-release@v0.2.0
+        with:
+          delete_release: true
+          tag_name: vlatest
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "./research-frontend.tar.gz"
+          tag: vlatest
